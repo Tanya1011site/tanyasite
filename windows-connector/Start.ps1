@@ -19,6 +19,9 @@ try {
             if (!(Test-Path $name)) { Copy-Item -LiteralPath $source -Destination $name -Recurse }
         }
     }
+    $targetExe = Join-Path $PSScriptRoot 'Connector.exe'
+    $running = @(Get-Process -Name Connector -ErrorAction SilentlyContinue | Where-Object { try { $_.Path -eq $targetExe } catch { $false } })
+    if ($running.Count -gt 0) { throw 'Connector is already running. Use Alt+Tab to find it, or close it before restarting.' }
     $compiler = Join-Path $env:WINDIR 'Microsoft.NET\Framework\v4.0.30319\csc.exe'
     if (!(Test-Path $compiler)) { throw '.NET Framework compiler missing.' }
     & $compiler /nologo /codepage:65001 /target:winexe /platform:x86 /out:Connector.exe /reference:System.Windows.Forms.dll /reference:System.Drawing.dll /reference:megaSpeedyAPIDotnet.dll Connector.cs

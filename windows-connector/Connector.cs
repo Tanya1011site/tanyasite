@@ -17,35 +17,41 @@ class Connector : Form {
  ComboBox contracts=new ComboBox(); Label status=new Label(), last=new Label();
  spdQuoteAPI api; readonly object gate=new object(); readonly List<Candle> bars=new List<Candle>();
  string symbol="", state="尚未登入", matchTime=""; bool authenticated=false, subscribed=false; long lastReceipt=0;
- TcpListener server; bool closing=false;
+ TcpListener server; bool closing=false, attempted=false, contractsReady=false; System.Windows.Forms.Timer loginTimer;
  const int LocalPort=8765;
  [STAThread] static void Main() { Application.EnableVisualStyles(); Application.Run(new Connector()); }
  public Connector() {
-  Text="兆豐行情連接 · 僅接收行情"; Width=620; Height=400; Font=new Font("Microsoft JhengHei",10);
+  Text="兆豐行情連接 · 僅接收行情"; Width=620; Height=435; Font=new Font("Microsoft JhengHei",10);
   var labels=new string[]{"行情主機", "連接埠", "行情帳號", "行情密碼"}; var fields=new TextBox[]{host,port,user,password};
   for(int i=0;i<4;i++){Controls.Add(new Label(){Text=labels[i],Left=20,Top=24+i*40,Width=110});fields[i].SetBounds(140,20+i*40,420,28);Controls.Add(fields[i]);}
   password.UseSystemPasswordChar=true;
   login.Text="1. 登入行情";login.SetBounds(20,190,150,35);login.Click+=(s,e)=>Login();Controls.Add(login);
   contracts.SetBounds(20,235,380,30);contracts.DropDownStyle=ComboBoxStyle.DropDownList;Controls.Add(contracts);
   subscribe.Text="2. 訂閱商品";subscribe.SetBounds(410,235,150,30);subscribe.Enabled=false;subscribe.Click+=(s,e)=>Subscribe();Controls.Add(subscribe);
-  status.SetBounds(20,280,560,26);status.Text=state;Controls.Add(status);
-  last.SetBounds(20,308,560,25);last.Text="登入資料只保留於本次程式記憶體，不儲存檔案。";Controls.Add(last);
+  status.SetBounds(20,280,560,48);status.Text=state;Controls.Add(status);
+  last.SetBounds(20,338,560,40);last.Text="登入資料只保留於本次程式記憶體，不儲存檔案。";Controls.Add(last);
   view.Text="3. 開啟看盤";view.SetBounds(410,190,150,35);view.Enabled=false;view.Click+=(s,e)=>System.Diagnostics.Process.Start("http://127.0.0.1:"+LocalPort+"/");Controls.Add(view);
-  FormClosing+=(s,e)=>{closing=true;if(server!=null)server.Stop();};
+  FormClosing+=(s,e)=>{closing=true;if(loginTimer!=null)loginTimer.Stop();if(server!=null)server.Stop();};
  }
  void UI(Action a){if(!closing&&!IsDisposed)try{BeginInvoke(a);}catch(InvalidOperationException){}}
  void SetState(string text){lock(gate)state=text;UI(()=>status.Text=text);}
- void Login(){int p;if(string.IsNullOrWhiteSpace(host.Text)||!int.TryParse(port.Text,out p)||p<1||p>65535||string.IsNullOrWhiteSpace(user.Text)||password.Text.Length==0){MessageBox.Show("請填入兆豐提供的行情主機、連接埠、帳號與密碼。");return;}
-  login.Enabled=false;
+ void Login(){if(attempted){Application.Restart();return;}int p;if(string.IsNullOrWhiteSpace(host.Text)||!int.TryParse(port.Text,out p)||p<1||p>65535||string.IsNullOrWhiteSpace(user.Text)||password.Text.Length==0){MessageBox.Show("請填入兆豐提供的行情主機、連接埠、帳號與密碼。");return;}
+  attempted=true;login.Text="重新啟動連線";login.Enabled=false;
+  string loginHost=host.Text.Trim(), loginUser=user.Text.Trim(), loginPassword=password.Text;
+  host.Enabled=port.Enabled=user.Enabled=password.Enabled=false;
+  SetState("正在連接兆豐行情主機，等待登入回覆…");
+  loginTimer=new System.Windows.Forms.Timer();loginTimer.Interval=20000;
+  loginTimer.Tick+=(sender,args)=>{loginTimer.Stop();if(!contractsReady){SetState("尚未完成連線。可稍候，或按重新啟動；請核對行情 IP、Port 與權限。");login.Enabled=true;}};loginTimer.Start();
   try{api=new spdQuoteAPI();
    api.evOnConnected=new OnQuoteConnected(()=>SetState("主機已連接，等待登入確認"));
-   api.evOnDisconnected=new OnQuoteDisconnected(()=>{authenticated=false;SetState("已斷線：畫面保留最後資料，請關閉程式後重新登入");UI(()=>subscribe.Enabled=false);});
-   api.evOnLogonResponse=new OnQuoteLogonResponse((ok,msg)=>{authenticated=ok;SetState(ok?"登入成功，等待商品清單":"登入失敗，請確認權限及資料後重新啟動");});
-   api.evOnContractDownloadComplete=new OnQuoteContractDownloadComplete(n=>UI(()=>{contracts.Items.Clear();foreach(var key in api.Futures.Keys)contracts.Items.Add("期貨 | "+key);foreach(var key in api.Options.Keys)contracts.Items.Add("選擇權 | "+key);if(contracts.Items.Count>0)contracts.SelectedIndex=0;subscribe.Enabled=authenticated&&contracts.Items.Count>0;SetState("商品清單已下載，請選擇目前交易的合約");}));
+   api.evOnDisconnected=new OnQuoteDisconnected(()=>{authenticated=false;SetState("已斷線：畫面保留最後資料，請關閉程式後重新登入");UI(()=>{subscribe.Enabled=false;login.Enabled=true;if(loginTimer!=null)loginTimer.Stop();});});
+   api.evOnLogonResponse=new OnQuoteLogonResponse((ok,msg)=>{authenticated=ok;SetState(ok?"登入成功，等待商品清單":"登入遭拒。請核對行情帳密與 API 權限，再按重新啟動。");UI(()=>{if(ok){subscribe.Enabled=contractsReady&&contracts.Items.Count>0;}else{login.Enabled=true;loginTimer.Stop();}});});
+   api.evOnContractDownloadComplete=new OnQuoteContractDownloadComplete(n=>UI(()=>{contractsReady=true;loginTimer.Stop();contracts.Items.Clear();foreach(var key in api.Futures.Keys)contracts.Items.Add("期貨 | "+key);foreach(var key in api.Options.Keys)contracts.Items.Add("選擇權 | "+key);if(contracts.Items.Count>0)contracts.SelectedIndex=0;subscribe.Enabled=authenticated&&contracts.Items.Count>0;login.Enabled=true;SetState(authenticated?"登入成功，商品清單已下載。請選合約並按訂閱商品。":"商品清單已下載，仍在等待登入確認。");}));
    api.evOnTrade=new OnQuoteTrade(Trade);
    StartServer();
-   api.Logon(host.Text.Trim(),p,user.Text.Trim(),password.Text,true); password.Clear();
-  }catch(Exception ex){SetState("無法啟動："+ex.GetType().Name+"。請確認官方套件與設定檔齊全，關閉後重試。");}
+   password.Clear();
+   var connection=new Thread(()=>{try{api.Logon(loginHost,p,loginUser,loginPassword,true);}catch(Exception ex){SetState("連線失敗："+ex.GetType().Name+"。可按重新啟動再試。");UI(()=>{loginTimer.Stop();login.Enabled=true;});}finally{loginPassword=null;}});connection.IsBackground=true;connection.Start();
+  }catch(Exception ex){loginTimer.Stop();login.Enabled=true;loginPassword=null;SetState("無法啟動："+ex.GetType().Name+"。請確認官方套件與設定檔齊全，再按重新啟動。");}
  }
  void Subscribe(){if(!authenticated||contracts.SelectedItem==null||subscribed)return;var text=contracts.SelectedItem.ToString();var key=text.Substring(text.IndexOf(" | ")+3);lock(gate){symbol=key;bars.Clear();lastReceipt=0;}try{if(text.StartsWith("期貨"))api.SubscribeContract(api.Futures[key]);else api.SubscribeContract(api.Options[key]);subscribed=true;subscribe.Enabled=false;contracts.Enabled=false;view.Enabled=true;SetState("已送出订閱，等待成交。切換商品請重新啟動程式。");}catch(Exception ex){SetState("訂閱失敗："+ex.GetType().Name);}}
  void Trade(string exchange,string code,string time,double price,int qty,bool test){if(test||price<=0||double.IsNaN(price)||double.IsInfinity(price)||qty<=0)return;lock(gate){if(code!=symbol)return;var now=DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();long minute=now/60000*60000;Candle c;if(bars.Count==0||bars[bars.Count-1].time!=minute){c=new Candle(){time=minute,open=price,high=price,low=price,close=price};bars.Add(c);if(bars.Count>300)bars.RemoveAt(0);}else c=bars[bars.Count-1];c.high=Math.Max(c.high,price);c.low=Math.Min(c.low,price);c.close=price;c.volume+=qty;lastReceipt=now;matchTime=time;state="已接收真實成交";}UI(()=>{last.Text="商品 "+code+" ｜成交 "+price+" ｜單筆 "+qty+" ｜行情時間 "+time;status.Text="已接收真實成交";});}
