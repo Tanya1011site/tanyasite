@@ -1,4 +1,4 @@
-$ErrorActionPreference = 'Stop'
+﻿$ErrorActionPreference = 'Stop'
 Set-Location $PSScriptRoot
 try {
     if (!(Test-Path 'megaSpeedyAPIDotnet.dll') -or !(Test-Path 'megaSpeedyAPI.dll') -or !(Test-Path 'Temp') -or !(Test-Path 'speedyAPI_config.json')) {
@@ -21,7 +21,7 @@ try {
     }
     $compiler = Join-Path $env:WINDIR 'Microsoft.NET\Framework\v4.0.30319\csc.exe'
     if (!(Test-Path $compiler)) { throw '.NET Framework compiler missing.' }
-    & $compiler /nologo /target:winexe /platform:x86 /out:Connector.exe /reference:System.Windows.Forms.dll /reference:System.Drawing.dll /reference:megaSpeedyAPIDotnet.dll Connector.cs
+    & $compiler /nologo /codepage:65001 /target:winexe /platform:x86 /out:Connector.exe /reference:System.Windows.Forms.dll /reference:System.Drawing.dll /reference:megaSpeedyAPIDotnet.dll Connector.cs
     if ($LASTEXITCODE -ne 0) { throw 'Compilation failed. Please send a screenshot without credentials.' }
     Start-Process -FilePath '.\Connector.exe' -WorkingDirectory $PSScriptRoot
 } catch {
