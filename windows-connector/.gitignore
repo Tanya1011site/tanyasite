@@ -1,0 +1,6 @@
+*.dll
+*.exe
+*.pfx
+*.p12
+Temp/
+speedyAPI_config.json
