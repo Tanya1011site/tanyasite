@@ -20,7 +20,7 @@ class Connector : Form {
  string symbol="", state="尚未登入", matchTime=""; bool authenticated=false, subscribed=false; long lastReceipt=0;
  long quoteReceipt=0, tradeCallbacks=0, selectedTrades=0, testTrades=0, bookCallbacks=0; double bid=0,ask=0; string lastTradeSymbol="";
  TcpListener server; bool closing=false, attempted=false, contractsReady=false; System.Windows.Forms.Timer loginTimer;
- const int LocalPort=8765;
+ int localPort=8765;
  [STAThread] static void Main() { Application.EnableVisualStyles(); Application.Run(new Connector()); }
  public Connector() {
   Text="兆豐行情連接 · 僅接收行情"; Width=620; Height=505; Font=new Font("Microsoft JhengHei",10);
@@ -36,7 +36,7 @@ class Connector : Form {
   subscribe.Text="2. 訂閱商品";subscribe.SetBounds(410,305,150,30);subscribe.Enabled=false;subscribe.Click+=(s,e)=>Subscribe();Controls.Add(subscribe);
   status.SetBounds(20,350,560,48);status.Text=state;Controls.Add(status);
   last.SetBounds(20,408,560,40);last.Text="登入資料只保留於本次程式記憶體，不儲存檔案。";Controls.Add(last);
-  view.Text="3. 開啟看盤";view.SetBounds(410,190,150,35);view.Enabled=false;view.Click+=(s,e)=>System.Diagnostics.Process.Start("http://127.0.0.1:"+LocalPort+"/");Controls.Add(view);
+  view.Text="3. 開啟看盤";view.SetBounds(410,190,150,35);view.Enabled=false;view.Click+=(s,e)=>System.Diagnostics.Process.Start("http://127.0.0.1:"+localPort+"/");Controls.Add(view);
   FormClosing+=(s,e)=>{closing=true;if(loginTimer!=null)loginTimer.Stop();if(server!=null)server.Stop();};
  }
  void UI(Action a){if(!closing&&!IsDisposed)try{BeginInvoke(a);}catch(InvalidOperationException){}}
@@ -65,14 +65,24 @@ class Connector : Form {
    api.evOnTrade=new OnQuoteTrade(Trade);
    api.evOnOrderBook=new OnQuoteOrderBook(Book);
    StartServer();
+   SetState("本機看盤已啟動（Port "+localPort+"），正在等待行情登入回覆…");
    password.Clear();
    var connection=new Thread(()=>{try{api.Logon(loginHost,p,loginUser,loginPassword,true);}catch(Exception ex){SetState("連線失敗："+ex.GetType().Name+"。可按重新啟動再試。");UI(()=>{loginTimer.Stop();login.Enabled=true;});}finally{loginPassword=null;}});connection.IsBackground=true;connection.Start();
-  }catch(Exception ex){loginTimer.Stop();login.Enabled=true;loginPassword=null;SetState("無法啟動："+ex.GetType().Name+"。請確認官方套件與設定檔齊全，再按重新啟動。");}
+  }catch(SocketException ex){loginTimer.Stop();login.Enabled=true;loginPassword=null;SetState("本機看盤服務啟動失敗："+ex.SocketErrorCode+"。請關閉舊工具後按重新啟動。");}
+  catch(Exception ex){loginTimer.Stop();login.Enabled=true;loginPassword=null;SetState("無法啟動："+ex.GetType().Name+"。請確認官方套件與設定檔齊全，再按重新啟動。");}
  }
  void Subscribe(){if(!authenticated||contracts.SelectedItem==null||subscribed)return;var text=contracts.SelectedItem.ToString();var key=text.Substring(text.IndexOf(" | ")+3);lock(gate){symbol=key;bars.Clear();lastReceipt=0;}try{if(text.StartsWith("期貨"))api.SubscribeContract(api.Futures[key]);else api.SubscribeContract(api.Options[key]);subscribed=true;subscribe.Enabled=false;contracts.Enabled=false;search.Enabled=false;singleOnly.Enabled=false;view.Enabled=true;SetState("已送出订閱，等待成交。切換商品請重新啟動程式。");}catch(Exception ex){SetState("訂閱失敗："+ex.GetType().Name);}}
  void Book(string exchange,string code,string time,MsgOrderBook book){lock(gate){bookCallbacks++;if(code.Trim()!=symbol||book.IsTestMatch)return;bid=book.BidPrice1;ask=book.AskPrice1;quoteReceipt=DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();if(lastReceipt==0)state="已收到真實委託報價，等待成交建立 K 線";}}
  void Trade(string exchange,string code,string time,double price,int qty,bool test){lock(gate){tradeCallbacks++;lastTradeSymbol=code;if(test)testTrades++;if(code.Trim()==symbol)selectedTrades++;}if(test||price<=0||double.IsNaN(price)||double.IsInfinity(price)||qty<=0)return;lock(gate){if(code.Trim()!=symbol)return;var now=DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();long minute=now/60000*60000;Candle c;if(bars.Count==0||bars[bars.Count-1].time!=minute){c=new Candle(){time=minute,open=price,high=price,low=price,close=price};bars.Add(c);if(bars.Count>300)bars.RemoveAt(0);}else c=bars[bars.Count-1];c.high=Math.Max(c.high,price);c.low=Math.Min(c.low,price);c.close=price;c.volume+=qty;lastReceipt=now;matchTime=time;state="已接收真實成交";}UI(()=>{last.Text="商品 "+code+" ｜成交 "+price+" ｜單筆 "+qty+" ｜行情時間 "+time;status.Text="已接收真實成交";});}
  static string Escape(string s){var b=new StringBuilder();foreach(char c in s){if(c=='"'||c=='\\')b.Append('\\').Append(c);else if(c<32)b.Append("\\u").Append(((int)c).ToString("x4"));else b.Append(c);}return b.ToString();}
  string Snapshot(){lock(gate){var b=new StringBuilder();b.Append("{\"status\":\"").Append(Escape(state)).Append("\",\"symbol\":\"").Append(Escape(symbol)).Append("\",\"connected\":").Append(authenticated?"true":"false").Append(",\"lastReceipt\":").Append(lastReceipt).Append(",\"quoteReceipt\":").Append(quoteReceipt).Append(",\"bid\":").Append(bid.ToString(CultureInfo.InvariantCulture)).Append(",\"ask\":").Append(ask.ToString(CultureInfo.InvariantCulture)).Append(",\"tradeCallbacks\":").Append(tradeCallbacks).Append(",\"selectedTrades\":").Append(selectedTrades).Append(",\"testTrades\":").Append(testTrades).Append(",\"bookCallbacks\":").Append(bookCallbacks).Append(",\"lastTradeSymbol\":\"").Append(Escape(lastTradeSymbol)).Append("\"").Append(",\"matchTime\":\"").Append(Escape(matchTime)).Append("\",\"candles\":[");for(int i=0;i<bars.Count;i++){if(i>0)b.Append(',');var c=bars[i];b.Append("{\"time\":").Append(c.time).Append(",\"open\":").Append(c.open.ToString(CultureInfo.InvariantCulture)).Append(",\"high\":").Append(c.high.ToString(CultureInfo.InvariantCulture)).Append(",\"low\":").Append(c.low.ToString(CultureInfo.InvariantCulture)).Append(",\"close\":").Append(c.close.ToString(CultureInfo.InvariantCulture)).Append(",\"volume\":").Append(c.volume).Append('}');}return b.Append("]}").ToString();}}
- void StartServer(){server=new TcpListener(IPAddress.Loopback,LocalPort);server.Start();var t=new Thread(()=>{while(!closing){try{using(var client=server.AcceptTcpClient()){client.ReceiveTimeout=2000;client.SendTimeout=2000;using(var stream=client.GetStream()){var reader=new StreamReader(stream,Encoding.ASCII,false,1024,true);string line=reader.ReadLine();int size=0;string h;while(!string.IsNullOrEmpty(h=reader.ReadLine())){size+=h.Length;if(size>8192)throw new IOException();}string body,kind,code;if(line=="GET /api/snapshot HTTP/1.1"){body=Snapshot();kind="application/json";code="200 OK";}else if(line=="GET / HTTP/1.1"){body=File.ReadAllText("live.html",Encoding.UTF8);kind="text/html";code="200 OK";}else{body="Not found";kind="text/plain";code="404 Not Found";}var bytes=Encoding.UTF8.GetBytes(body);var header=Encoding.ASCII.GetBytes("HTTP/1.1 "+code+"\r\nContent-Type: "+kind+"; charset=utf-8\r\nContent-Length: "+bytes.Length+"\r\nCache-Control: no-store\r\nConnection: close\r\nX-Content-Type-Options: nosniff\r\n\r\n");stream.Write(header,0,header.Length);stream.Write(bytes,0,bytes.Length);}}}catch(Exception){if(closing)break;}}});t.IsBackground=true;t.Start();}
+ void StartServer(){
+  bool started=false;
+  for(int candidate=8765;candidate<=8785;candidate++){
+   var listener=new TcpListener(IPAddress.Loopback,candidate);
+   try{listener.Start();server=listener;localPort=candidate;started=true;break;}
+   catch(SocketException ex){listener.Stop();if(ex.SocketErrorCode!=SocketError.AddressAlreadyInUse)throw;}
+  }
+  if(!started)throw new SocketException((int)SocketError.AddressAlreadyInUse);
+var t=new Thread(()=>{while(!closing){try{using(var client=server.AcceptTcpClient()){client.ReceiveTimeout=2000;client.SendTimeout=2000;using(var stream=client.GetStream()){var reader=new StreamReader(stream,Encoding.ASCII,false,1024,true);string line=reader.ReadLine();int size=0;string h;while(!string.IsNullOrEmpty(h=reader.ReadLine())){size+=h.Length;if(size>8192)throw new IOException();}string body,kind,code;if(line=="GET /api/snapshot HTTP/1.1"){body=Snapshot();kind="application/json";code="200 OK";}else if(line=="GET / HTTP/1.1"){body=File.ReadAllText("live.html",Encoding.UTF8);kind="text/html";code="200 OK";}else{body="Not found";kind="text/plain";code="404 Not Found";}var bytes=Encoding.UTF8.GetBytes(body);var header=Encoding.ASCII.GetBytes("HTTP/1.1 "+code+"\r\nContent-Type: "+kind+"; charset=utf-8\r\nContent-Length: "+bytes.Length+"\r\nCache-Control: no-store\r\nConnection: close\r\nX-Content-Type-Options: nosniff\r\n\r\n");stream.Write(header,0,header.Length);stream.Write(bytes,0,bytes.Length);}}}catch(Exception){if(closing)break;}}});t.IsBackground=true;t.Start();}
 }
