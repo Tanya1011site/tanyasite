@@ -4,10 +4,11 @@
  const loopback=['127.0.0.1','localhost','[::1]'].includes(location.hostname);
  const status=document.createElement('section');status.className='feed-status stale';status.setAttribute('role','status');document.querySelector('.order-alerts').before(status);
  const setText=(id,text)=>{document.getElementById(id).textContent=text};
- document.querySelector('.notice').textContent='兆豐本機行情連動｜僅顯示此工具實際收到的資料。單月合約、無歷史回補；尚未與手機同步。';
+ document.querySelector('.notice').textContent='兆豐本機行情連動｜僅顯示此工具實際收到的資料。單月合約、無歷史回補；手機請透過工具的 QR Code 配對。';
  document.querySelector('.mock-pill').textContent='真實行情';
  document.querySelector('header small').textContent='兆豐本機行情 · 真實資料';
- document.querySelector('.footer').textContent='此頁由本機工具提供。GitHub Pages 與手機仍未接入真實行情。';
+ document.querySelector('.footer').textContent='此頁由本機工具提供。手機可透過工具的配對連結連入；GitHub Pages 仍為模擬行情。';
+ if(window.remotePhoneMode){document.querySelector('.notice').textContent='兆豐手機真實行情｜電腦透過 HTTPS 通道同步；單月合約、無歷史回補。';document.querySelector('.footer').textContent='手機行情由你的電腦提供，電腦與行情工具需持續開啟。配對最長 8 小時有效。';document.querySelector('header small').textContent='兆豐手機同步 · 真實資料';}
  const oldSummary=document.querySelector('.order-alerts summary');oldSummary.firstChild.textContent='大口數成交通知 · 真實行情 ';
  document.querySelector('.order-alerts').setAttribute('aria-label','真實大口數成交通知');
  document.querySelector('.order-note').textContent='依每筆成交回呼口數觸發，不代表單一委託或新倉進場。僅期貨在有效近期買賣報價下推估主動買／賣，其餘方向未明。不提供鎖屏推播。';
@@ -51,6 +52,6 @@
   }
   lastSeq=Math.max(lastSeq,sequence);
  }catch(e){offline(e.message==='行情格式無效'?e.message:'無法連接本機行情工具');}finally{inFlight=false}}
- if(!loopback){offline('真實行情模式需從 Windows 工具的「開啟看盤」進入，公開網站未接入行情');drawCandles();return;}
+ if(!loopback&&!window.remotePhoneMode){offline('真實行情模式需從 Windows 工具的「開啟看盤」進入，公開網站未接入行情');drawCandles();return;}
  window.refreshLiveDashboard=poll;poll();setInterval(poll,1000);
 })();

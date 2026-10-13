@@ -30,4 +30,16 @@ python3 -m http.server 8000 --bind 0.0.0.0
 
 大口數成交通知以 SDK 每筆回呼數量為門檻，不保證等同單筆委託或新倉。僅期貨且買賣報價不超過 3 秒、價差有效時推估主動方；其餘標示方向未明。每秒讀取最近 200 筆並依序號去重，切換工作階段或首次進入不重播歷史；離線、頁面節流與高成交速率可能造成通知缺口。不提供背景鎖屏推播。
 
-目前只完成程式與合成快照的瀏覽器驗證，Windows DLL、登入與實際行情仍須在使用者電腦確認。公開 GitHub Pages 預設模擬模式；手機真實同步仍需受保護的後端，不能把券商憑證放到公開前端。
+目前只完成程式與合成快照的瀏覽器驗證，Windows DLL、登入與實際行情仍須在使用者電腦確認。公開 GitHub Pages 預設模擬模式；手機真實同步使用下面的受配對保護通道，不能把券商憑證放到公開前端。
+
+## 手機外網同步
+
+Windows 工具登入並訂閱成功後，按「4. 手機外網同步」，從本機配對頁掃 QR Code。首次以 winget 安裝官方 `Cloudflare.cloudflared`，保留套件校驗；需 Microsoft App Installer / winget。使用 Cloudflare Quick Tunnel 臨時 HTTPS 網址，不需要另外開放入站路由器或防火牆連接埠。
+
+外部通道只轉送到獨立的受保護 loopback listener；電腦原有的本機管理入口不對外轉送。256-bit 隨機配對 token 存在記憶體，最長 8 小時有效、重新啟動即更換。配對後以 Secure / HttpOnly / SameSite cookie 保護所有行情、網頁與 JS 路徑，禁止存取 SDK、設定檔與任意檔案路徑。配對入口將網址中的 token 交換為 cookie 後導向不含 token 的網址，回應採 no-store / no-referrer。
+
+QR Code 使用保留原版授權資訊的 MIT `qrcode-generator@2.0.4`，在本機生成；不將配對連結提交到外部 QR Code 服務。圖書館來源：npm registry，完整性經官方套件 metadata SHA512 驗證。
+
+電腦與工具需要持續開啟，關閉工具會停止它啟動的 tunnel。臨時網址有服務和網路可用性限制，不提供手機鎖屏推播。Cloudflare 中繼行情流量，券商登入帳密不包含於此 HTTP 服務。原 GitHub Pages 網址繼續提供模擬版本，真實行情改從私人配對連結進入。
+
+驗證：`dotnet run --project tests/mobile-server/MobileServerTests.csproj`（在專案根目錄，以 .NET 8 執行）。涵蓋未配對拒絕、cookie、到期、重啟 token、更換主機、檔案白名單與並行请求。完整 Windows C# 程式已用 .NET Framework 4.7.2 參考程序集及官方 SDK DLL 編譯檢查；實際 Windows 安裝通道、券商登入與外網手機連線仍需在使用者電腦確認。
