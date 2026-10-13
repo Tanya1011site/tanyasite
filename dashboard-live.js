@@ -21,7 +21,25 @@
  for(const id of ['price','mobile-price','change','mobile-change','call-total','put-total','ratio'])setText(id,'—');
  setText('mobile-contract','等待商品');setText('mobile-update','尚未收到行情');
  for(const card of document.querySelectorAll('main [data-view="chain"],main [data-view="flow"]')){
-  const title=card.querySelector('h2')?.textContent||'主力集中';card.replaceChildren();const h=document.createElement('h2');h.textContent=title.replaceAll('模擬','');const p=document.createElement('p');p.className='padded muted';p.textContent='尚未接入：目前只訂閱單一商品的成交與買賣報價，不提供完整選擇權鏈、未平倉或主力籌碼。';card.append(h,p);
+  const title=card.querySelector('h2')?.textContent||'主力集中';card.replaceChildren();const h=document.createElement('h2');h.textContent=title.replaceAll('模擬','');const p=document.createElement('p');p.className='padded muted';p.textContent='尚未接入：報價與成交不包含未平倉、主力身份或大戶／散戶分組資料。';card.append(h,p);
+ }
+ const chainCard=document.querySelector('main [data-view="chain"]');
+ chainCard.innerHTML='<h2>選擇權即時行情 <small id="live-option-series"></small></h2><p id="live-option-state" class="padded muted">等待期貨行情後訂閱所選選擇權組別。</p><div class="table-wrap"><table><thead><tr><th>CALL 買／賣</th><th>CALL 成交</th><th>履約價</th><th>PUT 成交</th><th>PUT 買／賣</th></tr></thead><tbody id="live-option-chain"></tbody></table></div><p class="padded muted" id="live-option-detail">點選履約價查看商品代碼。本次成交量僅累計工具啟動後收到的成交，不是未平倉。</p>';
+ const metricLabels=document.querySelectorAll('.metric span');metricLabels[2].textContent='本次 CALL 成交口數';metricLabels[3].textContent='本次 PUT 成交口數';metricLabels[4].textContent='選擇權報價接收';
+ let selectedStrike=null,userSelectedView=false,autoViewSet=false,optionPairs=[];
+ document.querySelectorAll('[data-tab]').forEach(b=>b.addEventListener('click',e=>{if(e.isTrusted)userSelectedView=true}));
+ document.getElementById('live-option-chain').onclick=e=>{const row=e.target.closest('tr');if(!row)return;selectedStrike=Number(row.dataset.strike);showOptionDetail();};
+ function showOptionDetail(){const pair=optionPairs.find(p=>p.strike===selectedStrike);if(!pair)return;for(const row of document.querySelectorAll('#live-option-chain tr'))row.classList.toggle('selected',Number(row.dataset.strike)===selectedStrike);setText('live-option-detail',`${pair.strike.toLocaleString('zh-TW')}｜CALL ${pair.call?.symbol||'—'}｜PUT ${pair.put?.symbol||'—'}｜本次接收成交量：CALL ${pair.call?.volume||0}／PUT ${pair.put?.volume||0} 口；未平倉尚未接入。`);}
+ function renderOptions(s){
+  const chain=s.optionChain,legs=Array.isArray(chain?.legs)?chain.legs:[];const valid=legs.filter(l=>['call','put'].includes(l.side)&&Number.isFinite(l.strike)&&l.strike>0&&typeof l.symbol==='string');
+  const pairs=new Map();for(const leg of valid){if(!pairs.has(leg.strike))pairs.set(leg.strike,{strike:leg.strike});pairs.get(leg.strike)[leg.side]=leg;}optionPairs=[...pairs.values()].sort((a,b)=>b.strike-a.strike);
+  setText('live-option-series',chain?.series||'尚未選擇組別');setText('live-option-state',`${chain?.status||'請在電腦工具選擇選擇權組別，再訂閱台指期。'}｜${valid.filter(l=>l.quoteReceipt>0).length}/${valid.length} 檔已收到報價。最多 9 個履約價；每格報價上方為買、下方為賣。資料不足留空。`);
+  const body=document.getElementById('live-option-chain');body.replaceChildren();const reference=s.candles.length?s.candles.at(-1).close:(s.bid>0&&s.ask>0?(s.bid+s.ask)/2:null);const atm=reference===null||!optionPairs.length?null:optionPairs.reduce((a,b)=>Math.abs(a.strike-reference)<=Math.abs(b.strike-reference)?a:b).strike;
+  function quoteCell(leg){const cell=document.createElement('td');if(!leg){cell.textContent='—';return cell;}if(leg.error){cell.textContent=leg.error;cell.className='muted';return cell;}if(!leg.quoteReceipt){cell.textContent='等待報價';cell.className='muted';return cell;}const bid=document.createElement('span'),ask=document.createElement('small');bid.textContent=leg.bid>0?leg.bid.toLocaleString('zh-TW'):'—';ask.textContent=leg.ask>0?leg.ask.toLocaleString('zh-TW'):'—';bid.style.display=ask.style.display='block';cell.append(bid,ask);cell.title=`${leg.symbol}：買 ${leg.bid}／賣 ${leg.ask}`;if(Date.now()-leg.quoteReceipt>60000){const stale=document.createElement('small');stale.style.display='block';stale.textContent='未更新';cell.append(stale);}return cell;}
+  function tradeCell(leg){const cell=document.createElement('td');if(!leg||!leg.tradeReceipt){cell.textContent='—';return cell;}cell.textContent=leg.last.toLocaleString('zh-TW');const qty=document.createElement('small');qty.textContent=leg.lastQty+' 口';qty.style.display='block';cell.append(qty);return cell;}
+  for(const pair of optionPairs){const row=document.createElement('tr');row.dataset.strike=pair.strike;row.className=pair.strike===atm?'atm':'';const strike=document.createElement('td');strike.className='strike';strike.textContent=pair.strike.toLocaleString('zh-TW');if(pair.strike===atm){const label=document.createElement('small');label.textContent='ATM';label.style.display='block';strike.append(label);}row.append(quoteCell(pair.call),tradeCell(pair.call),strike,tradeCell(pair.put),quoteCell(pair.put));body.append(row);}
+  for(const side of ['call','put']){const list=valid.filter(l=>l.side===side);setText(side+'-total',list.some(l=>l.tradeReceipt>0)?list.reduce((sum,l)=>sum+(Number(l.volume)||0),0).toLocaleString('zh-TW'):'—');}setText('ratio',valid.length?`${valid.filter(l=>l.quoteReceipt>0).length}/${valid.length}`:'—');showOptionDetail();
+  if(optionPairs.length&&!autoViewSet){autoViewSet=true;if(!userSelectedView)document.querySelector('[data-tab="chain"]').click();}
  }
  const chartCard=document.querySelector('.right [data-view="chart"]');chartCard.querySelector('h2').textContent='真實行情 K 線';chartCard.querySelector('.padded > small:last-child').textContent='依本機接收時間建立一分鐘 K 線，無成交分鐘不補線。MA144 需 144 根有成交 K 線；重啟後歷史清空。';
  document.getElementById('candles').setAttribute('aria-label','兆豐真實成交 K 線與均線');
@@ -35,7 +53,7 @@
   if(!Array.isArray(s.candles)||!s.candles.every(c=>[c.time,c.open,c.high,c.low,c.close,c.volume].every(Number.isFinite)&&c.close>0&&c.high>=Math.max(c.open,c.close)&&c.low<=Math.min(c.open,c.close)))throw Error('行情格式無效');
   const session=String(s.feedId||'legacy');const sequence=Number(s.tradeSeq)||0;
   if(feed!==session){feed=session;lastSeq=sequence;window.clearOrderAlertHistory?.();}
-  candles=s.candles;drawCandles();
+  candles=s.candles;drawCandles();renderOptions(s);
   const price=candles.length?candles.at(-1).close:null;for(const id of ['price','mobile-price'])setText(id,price===null?'—':price.toLocaleString('zh-TW'));
   setText('mobile-contract',s.symbol||'等待商品');document.querySelector('.metric span').textContent=s.symbol||'等待訂閱商品';
   const option=document.createElement('option');option.textContent=s.symbol||'請在連接工具訂閱';document.getElementById('contract').replaceChildren(option);
@@ -48,7 +66,7 @@
   if(Array.isArray(s.trades)){
    const incoming=s.trades.filter(t=>Number.isInteger(t.seq)&&t.seq>lastSeq).sort((a,b)=>a.seq-b.seq);
    if(incoming.length&&incoming[0].seq>lastSeq+1)status.textContent+='通知記錄有缺口，頁面離線期間部分成交未保留。';
-   for(const t of incoming){if(s.connected&&Date.now()-t.receipt<=10000&&Date.now()-t.receipt>=0)window.receiveLiveTrade?.(t,s.symbol);}
+   for(const t of incoming){if(s.connected&&Date.now()-t.receipt<=10000&&Date.now()-t.receipt>=0)window.receiveLiveTrade?.(t,t.symbol||s.symbol);}
   }
   lastSeq=Math.max(lastSeq,sequence);
  }catch(e){offline(e.message==='行情格式無效'?e.message:'無法連接本機行情工具');}finally{inFlight=false}}

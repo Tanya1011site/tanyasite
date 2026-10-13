@@ -47,7 +47,7 @@ try {
     if ($running.Count -gt 0) { throw 'Connector is already running. Use Alt+Tab to find it, or close it before restarting.' }
     $compiler = Join-Path $env:WINDIR 'Microsoft.NET\Framework\v4.0.30319\csc.exe'
     if (!(Test-Path $compiler)) { throw '.NET Framework compiler missing.' }
-    & $compiler /nologo /codepage:65001 /target:winexe /platform:x86 /out:Connector.exe /reference:System.Windows.Forms.dll /reference:System.Drawing.dll /reference:megaSpeedyAPIDotnet.dll Connector.cs MobileServer.cs
+    & $compiler /nologo /codepage:65001 /target:winexe /platform:x86 /out:Connector.exe /reference:System.Windows.Forms.dll /reference:System.Drawing.dll /reference:megaSpeedyAPIDotnet.dll Connector.cs MobileServer.cs OptionChain.cs
     if ($LASTEXITCODE -ne 0) { throw 'Compilation failed. Please send a screenshot without credentials.' }
     Start-Process -FilePath '.\Connector.exe' -WorkingDirectory $PSScriptRoot
 } catch {
