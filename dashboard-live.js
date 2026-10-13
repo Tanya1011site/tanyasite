@@ -11,7 +11,7 @@
  if(window.remotePhoneMode){document.querySelector('.notice').textContent='兆豐手機真實行情｜電腦透過 HTTPS 通道同步；單月合約、無歷史回補。';document.querySelector('.footer').textContent='手機行情由你的電腦提供，電腦與行情工具需持續開啟。配對最長 8 小時有效。';document.querySelector('header small').textContent='兆豐手機同步 · 真實資料';}
  const oldSummary=document.querySelector('.order-alerts summary');oldSummary.firstChild.textContent='大口數成交通知 · 真實行情 ';
  document.querySelector('.order-alerts').setAttribute('aria-label','真實大口數成交通知');
- document.querySelector('.order-note').textContent='依每筆成交回呼口數觸發，不代表單一委託或新倉進場。僅期貨在有效近期買賣報價下推估主動買／賣，其餘方向未明。不提供鎖屏推播。';
+ document.querySelector('.order-note').textContent='依每筆成交回呼口數觸發，不代表單一委託或新倉進場。期貨與選擇權依有效近期買賣報價推估主動方，其餘方向未明。不提供鎖屏推播。';
  document.getElementById('order-test').hidden=true;
  document.querySelector('#order-direction option[value="both"]').textContent='全部（含方向未明）';
  document.querySelector('#order-direction option[value="bull"]').textContent='只看主動買推估';
@@ -23,6 +23,7 @@
  for(const card of document.querySelectorAll('main [data-view="chain"],main [data-view="flow"]')){
   const title=card.querySelector('h2')?.textContent||'主力集中';card.replaceChildren();const h=document.createElement('h2');h.textContent=title.replaceAll('模擬','');const p=document.createElement('p');p.className='padded muted';p.textContent='尚未接入：報價與成交不包含未平倉、主力身份或大戶／散戶分組資料。';card.append(h,p);
  }
+ window.RealFlow?.init();
  const chainCard=document.querySelector('main [data-view="chain"]');
  chainCard.innerHTML='<h2>選擇權即時行情 <small id="live-option-series"></small></h2><p id="live-option-state" class="padded muted">等待期貨行情後訂閱所選選擇權組別。</p><div class="table-wrap"><table><thead><tr><th>CALL 買／賣</th><th>CALL 成交</th><th>履約價</th><th>PUT 成交</th><th>PUT 買／賣</th></tr></thead><tbody id="live-option-chain"></tbody></table></div><p class="padded muted" id="live-option-detail">點選履約價查看商品代碼。本次成交量僅累計工具啟動後收到的成交，不是未平倉。</p>';
  const metricLabels=document.querySelectorAll('.metric span');metricLabels[2].textContent='本次 CALL 成交口數';metricLabels[3].textContent='本次 PUT 成交口數';metricLabels[4].textContent='選擇權報價接收';
@@ -53,7 +54,7 @@
   if(!Array.isArray(s.candles)||!s.candles.every(c=>[c.time,c.open,c.high,c.low,c.close,c.volume].every(Number.isFinite)&&c.close>0&&c.high>=Math.max(c.open,c.close)&&c.low<=Math.min(c.open,c.close)))throw Error('行情格式無效');
   const session=String(s.feedId||'legacy');const sequence=Number(s.tradeSeq)||0;
   if(feed!==session){feed=session;lastSeq=sequence;window.clearOrderAlertHistory?.();}
-  candles=s.candles;drawCandles();renderOptions(s);
+  candles=s.candles;drawCandles();renderOptions(s);window.RealFlow?.render(s);
   const price=candles.length?candles.at(-1).close:null;for(const id of ['price','mobile-price'])setText(id,price===null?'—':price.toLocaleString('zh-TW'));
   setText('mobile-contract',s.symbol||'等待商品');document.querySelector('.metric span').textContent=s.symbol||'等待訂閱商品';
   const option=document.createElement('option');option.textContent=s.symbol||'請在連接工具訂閱';document.getElementById('contract').replaceChildren(option);

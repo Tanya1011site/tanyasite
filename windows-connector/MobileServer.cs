@@ -27,7 +27,7 @@ class MobileServer : IDisposable {
   if(!Valid(session)){Reply(stream,"401 Unauthorized","text/plain","Open the pairing link from your computer first. Do not share it.",null);return;}
   string path=target.Split('?')[0];if(path=="/api/snapshot"){Reply(stream,"200 OK","application/json",snapshot(),null);return;}
   if(path=="/"){string html=File.ReadAllText(Path.Combine(root,"index.html"),Encoding.UTF8).Replace("window.liveMode=new URLSearchParams(location.search).get(\"mode\")===\"live\";","window.liveMode=true;window.remotePhoneMode=true;");Reply(stream,"200 OK","text/html",html,null);return;}
-  if(path=="/large-order-alerts.js"||path=="/dashboard-live.js"){Reply(stream,"200 OK","text/javascript",File.ReadAllText(Path.Combine(root,path.Substring(1)),Encoding.UTF8),null);return;}
+  if(path=="/large-order-alerts.js"||path=="/dashboard-live.js"||path=="/live-flow.js"){Reply(stream,"200 OK","text/javascript",File.ReadAllText(Path.Combine(root,path.Substring(1)),Encoding.UTF8),null);return;}
   Reply(stream,"404 Not Found","text/plain","Not found",null);
  }
  static string ReadLine(NetworkStream stream,int limit){if(limit<=0)throw new IOException();var bytes=new List<byte>();int c;while((c=stream.ReadByte())!=-1){if(c==10){if(bytes.Count>0&&bytes[bytes.Count-1]==13)bytes.RemoveAt(bytes.Count-1);return Encoding.ASCII.GetString(bytes.ToArray());}if(bytes.Count>=limit)throw new IOException();bytes.Add((byte)c);}return null;}

@@ -1,7 +1,7 @@
 ﻿$ErrorActionPreference = 'Stop'
 Set-Location $PSScriptRoot
 try {
-    foreach ($asset in @('index.html', 'large-order-alerts.js', 'dashboard-live.js', 'phone.html', 'phone.js', 'vendor\qrcode.js')) {
+    foreach ($asset in @('index.html', 'large-order-alerts.js', 'dashboard-live.js', 'live-flow.js', 'phone.html', 'phone.js', 'vendor\qrcode.js')) {
         if (!(Test-Path (Join-Path (Split-Path $PSScriptRoot -Parent) $asset))) { throw 'Dashboard files missing. Extract the whole repository ZIP and keep windows-connector inside it.' }
     }
     if (!(Test-Path 'megaSpeedyAPIDotnet.dll') -or !(Test-Path 'megaSpeedyAPI.dll') -or !(Test-Path 'Temp') -or !(Test-Path 'speedyAPI_config.json')) {
