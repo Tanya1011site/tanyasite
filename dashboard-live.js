@@ -4,14 +4,14 @@
  const loopback=['127.0.0.1','localhost','[::1]'].includes(location.hostname);
  const status=document.createElement('section');status.className='feed-status stale';status.setAttribute('role','status');document.querySelector('.order-alerts').before(status);
  const setText=(id,text)=>{document.getElementById(id).textContent=text};
- document.querySelector('.notice').textContent='兆豐本機行情連動｜僅顯示此工具實際收到的資料。單月合約、無歷史回補；手機請透過工具的 QR Code 配對。';
+ document.querySelector('.notice').textContent='兆豐本機行情連動｜僅顯示此工具實際收到的資料。同月大小微台與月選；歷史涵蓋範圍請看週資料；手機請透過工具的 QR Code 配對。';
  document.querySelector('.mock-pill').textContent='真實行情';
  document.querySelector('header small').textContent='兆豐本機行情 · 真實資料';
  document.querySelector('.footer').textContent='此頁由本機工具提供。手機可透過工具的配對連結連入；GitHub Pages 仍為模擬行情。';
- if(window.remotePhoneMode){document.querySelector('.notice').textContent='兆豐手機真實行情｜電腦透過 HTTPS 通道同步；單月合約、無歷史回補。';document.querySelector('.footer').textContent='手機行情由你的電腦提供，電腦與行情工具需持續開啟。配對最長 8 小時有效。';document.querySelector('header small').textContent='兆豐手機同步 · 真實資料';}
+ if(window.remotePhoneMode){document.querySelector('.notice').textContent='兆豐手機真實行情｜電腦透過 HTTPS 通道同步；同月大小微台與月選；歷史涵蓋範圍請看週資料。';document.querySelector('.footer').textContent='手機行情由你的電腦提供，電腦與行情工具需持續開啟。配對最長 8 小時有效。';document.querySelector('header small').textContent='兆豐手機同步 · 真實資料';}
  const oldSummary=document.querySelector('.order-alerts summary');oldSummary.firstChild.textContent='大口數成交通知 · 真實行情 ';
  document.querySelector('.order-alerts').setAttribute('aria-label','真實大口數成交通知');
- document.querySelector('.order-note').textContent='依每筆成交回呼口數觸發，不代表單一委託或新倉進場。期貨與選擇權依有效近期買賣報價推估主動方，其餘方向未明。不提供鎖屏推播。';
+ document.querySelector('.order-note').textContent='預設大小微台單筆 ≥300 口、選擇權 ≥50 口；選擇權權利金 >50 萬特別標註（成交價 × 合約乘數 × 口數）。可調整通知門檻；不代表單一委託或新倉進場。期貨與選擇權依有效近期買賣報價推估主動方，其餘方向未明。不提供鎖屏推播。';
  document.getElementById('order-test').hidden=true;
  document.querySelector('#order-direction option[value="both"]').textContent='全部（含方向未明）';
  document.querySelector('#order-direction option[value="bull"]').textContent='只看主動買推估';
@@ -34,17 +34,17 @@
  function renderOptions(s){
   const chain=s.optionChain,legs=Array.isArray(chain?.legs)?chain.legs:[];const valid=legs.filter(l=>['call','put'].includes(l.side)&&Number.isFinite(l.strike)&&l.strike>0&&typeof l.symbol==='string');
   const pairs=new Map();for(const leg of valid){if(!pairs.has(leg.strike))pairs.set(leg.strike,{strike:leg.strike});pairs.get(leg.strike)[leg.side]=leg;}optionPairs=[...pairs.values()].sort((a,b)=>b.strike-a.strike);
-  setText('live-option-series',chain?.series||'尚未選擇組別');setText('live-option-state',`${chain?.status||'請在電腦工具選擇選擇權組別，再訂閱台指期。'}｜${valid.filter(l=>l.quoteReceipt>0).length}/${valid.length} 檔已收到報價。最多 9 個履約價；每格報價上方為買、下方為賣。資料不足留空。`);
+  setText('live-option-series',chain?.series||'尚未選擇組別');setText('live-option-state',`${chain?.status||'請在電腦工具選擇選擇權組別，再訂閱台指期。'}｜${valid.filter(l=>l.quoteReceipt>0).length}/${valid.length} 檔已收到報價。目前規劃 ${optionPairs.length} 個履約價（與期貨共用 SDK 20 檔上限）；每格報價上方為買、下方為賣。資料不足留空。`);
   const body=document.getElementById('live-option-chain');body.replaceChildren();const reference=s.candles.length?s.candles.at(-1).close:(s.bid>0&&s.ask>0?(s.bid+s.ask)/2:null);const atm=reference===null||!optionPairs.length?null:optionPairs.reduce((a,b)=>Math.abs(a.strike-reference)<=Math.abs(b.strike-reference)?a:b).strike;
   function quoteCell(leg){const cell=document.createElement('td');if(!leg){cell.textContent='—';return cell;}if(leg.error){cell.textContent=leg.error;cell.className='muted';return cell;}if(!leg.quoteReceipt){cell.textContent='等待報價';cell.className='muted';return cell;}const bid=document.createElement('span'),ask=document.createElement('small');bid.textContent=leg.bid>0?leg.bid.toLocaleString('zh-TW'):'—';ask.textContent=leg.ask>0?leg.ask.toLocaleString('zh-TW'):'—';bid.style.display=ask.style.display='block';cell.append(bid,ask);cell.title=`${leg.symbol}：買 ${leg.bid}／賣 ${leg.ask}`;if(Date.now()-leg.quoteReceipt>60000){const stale=document.createElement('small');stale.style.display='block';stale.textContent='未更新';cell.append(stale);}return cell;}
-  function tradeCell(leg){const cell=document.createElement('td');if(!leg||!leg.tradeReceipt){cell.textContent='—';return cell;}cell.textContent=leg.last.toLocaleString('zh-TW');const qty=document.createElement('small');qty.textContent=leg.lastQty+' 口';qty.style.display='block';cell.append(qty);return cell;}
+  function tradeCell(leg){const cell=document.createElement('td');if(!leg||!leg.tradeReceipt){cell.textContent='—';return cell;}cell.textContent=leg.last.toLocaleString('zh-TW');const qty=document.createElement('small');qty.textContent=leg.lastQty+' 口';qty.style.display='block';cell.append(qty);const oi=window.MarketHistory?.oiLeg(leg.symbol);if(oi){const info=document.createElement('small');info.textContent=`OI ${oi.openInterest??'—'} (${oi.date})`;info.style.display='block';cell.append(info);}return cell;}
   for(const pair of optionPairs){const row=document.createElement('tr');row.dataset.strike=pair.strike;row.className=pair.strike===atm?'atm':'';const strike=document.createElement('td');strike.className='strike';strike.textContent=pair.strike.toLocaleString('zh-TW');if(pair.strike===atm){const label=document.createElement('small');label.textContent='ATM';label.style.display='block';strike.append(label);}row.append(quoteCell(pair.call),tradeCell(pair.call),strike,tradeCell(pair.put),quoteCell(pair.put));body.append(row);}
   for(const side of ['call','put']){const list=valid.filter(l=>l.side===side);setText(side+'-total',list.some(l=>l.tradeReceipt>0)?list.reduce((sum,l)=>sum+(Number(l.volume)||0),0).toLocaleString('zh-TW'):'—');}setText('ratio',valid.length?`${valid.filter(l=>l.quoteReceipt>0).length}/${valid.length}`:'—');showOptionDetail();
   if(optionPairs.length&&!autoViewSet){autoViewSet=true;if(!userSelectedView)document.querySelector('[data-tab="chain"]').click();}
  }
- const chartCard=document.querySelector('.right [data-view="chart"]');chartCard.querySelector('h2').textContent='真實行情 K 線';chartCard.querySelector('.padded > small:last-child').textContent='依本機接收時間建立一分鐘 K 線，無成交分鐘不補線。MA144 需 144 根有成交 K 線；重啟後歷史清空。';
+ const chartCard=document.querySelector('.right [data-view="chart"]');chartCard.querySelector('h2').textContent='真實行情 K 線';chartCard.querySelector('.padded > small:last-child').textContent='依本機接收時間建立一分鐘 K 線，無成交分鐘不補線。MA144 需 144 根有成交 K 線；重啟載入已保存歷史，亦可匯入官方逐筆。';
  document.getElementById('candles').setAttribute('aria-label','兆豐真實成交 K 線與均線');
- const notes=document.querySelectorAll('.right [data-view="chart"] .padded > small');notes[notes.length-1].textContent='依目前收到的成交區間計算回撤與轉折候選；不代表完整艾略特波浪判讀。';
+ const notes=document.querySelectorAll('.right [data-view="chart"] .padded > small');notes[notes.length-1].textContent='依日／夜盤震幅計算費波；逐筆轉折為波浪候選，無法確認完整艾略特波數。';
  // Show a useful chart first while option-chain data is unavailable.
  document.querySelector('[data-tab="chart"]').click();
  let feed=null,lastSeq=0,inFlight=false;
@@ -54,7 +54,7 @@
   if(!Array.isArray(s.candles)||!s.candles.every(c=>[c.time,c.open,c.high,c.low,c.close,c.volume].every(Number.isFinite)&&c.close>0&&c.high>=Math.max(c.open,c.close)&&c.low<=Math.min(c.open,c.close)))throw Error('行情格式無效');
   const session=String(s.feedId||'legacy');const sequence=Number(s.tradeSeq)||0;
   if(feed!==session){feed=session;lastSeq=sequence;window.clearOrderAlertHistory?.();}
-  candles=s.candles;drawCandles();renderOptions(s);window.RealFlow?.render(s);
+  candles=s.candles;window.marketSessions=s.historySummary?.sessions||[];drawCandles();renderOptions(s);window.RealFlow?.render(s);window.MarketHistory?.render(s);
   const price=candles.length?candles.at(-1).close:null;for(const id of ['price','mobile-price'])setText(id,price===null?'—':price.toLocaleString('zh-TW'));
   setText('mobile-contract',s.symbol||'等待商品');document.querySelector('.metric span').textContent=s.symbol||'等待訂閱商品';
   const option=document.createElement('option');option.textContent=s.symbol||'請在連接工具訂閱';document.getElementById('contract').replaceChildren(option);
@@ -64,9 +64,10 @@
   const stamp=last?new Date(last).toLocaleTimeString('zh-TW',{hour12:false,timeZone:'Asia/Taipei'}):'尚無資料';
   setText('status',!s.connected?'兆豐已斷線':stale?'等待行情／資料未更新':'兆豐行情接收中');setText('mobile-update',stamp+(!s.connected?' · 已斷線':stale?' · 等待更新':''));setText('updated','最後接收 '+stamp);
   const missing=[5,10,20,60,144].filter(n=>candles.length<n);if(missing.length)setText('ohlc',document.getElementById('ohlc').textContent+'｜資料不足：'+missing.map(n=>'MA'+n).join('、'));
-  if(Array.isArray(s.trades)){
-   const incoming=s.trades.filter(t=>Number.isInteger(t.seq)&&t.seq>lastSeq).sort((a,b)=>a.seq-b.seq);
-   if(incoming.length&&incoming[0].seq>lastSeq+1)status.textContent+='通知記錄有缺口，頁面離線期間部分成交未保留。';
+  const alerts=[...new Map([...(s.trades||[]),...(s.alertTrades||[])].map(t=>[t.seq,t])).values()];
+  if(Array.isArray(alerts)){
+   const incoming=alerts.filter(t=>Number.isInteger(t.seq)&&t.seq>lastSeq).sort((a,b)=>a.seq-b.seq);
+   if(!s.alertTrades&&incoming.length&&incoming[0].seq>lastSeq+1)status.textContent+='通知記錄有缺口，頁面離線期間部分成交未保留。';
    for(const t of incoming){if(s.connected&&Date.now()-t.receipt<=10000&&Date.now()-t.receipt>=0)window.receiveLiveTrade?.(t,t.symbol||s.symbol);}
   }
   lastSeq=Math.max(lastSeq,sequence);

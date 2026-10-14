@@ -9,13 +9,13 @@ using System.Threading;
 
 // Only this authenticated listener is forwarded by the Internet tunnel.
 class MobileServer : IDisposable {
- readonly Func<string> snapshot; readonly string root;
+ readonly Func<string> snapshot; readonly Func<string,string> history; readonly string root;
  readonly string token; readonly DateTime expires;
  TcpListener listener; volatile bool stopped; int clients;
  public int Port { get; private set; }
  public string PublicHost { get; set; }
  public DateTime Expires { get { return expires; } }
- public MobileServer(Func<string> snapshotReader,string dashboardRoot){snapshot=snapshotReader;root=Path.GetFullPath(dashboardRoot);var bytes=new byte[32];using(var rng=RandomNumberGenerator.Create())rng.GetBytes(bytes);token=BitConverter.ToString(bytes).Replace("-","").ToLowerInvariant();expires=DateTime.UtcNow.AddHours(8);}
+ public MobileServer(Func<string> snapshotReader,string dashboardRoot,Func<string,string> historyReader=null){snapshot=snapshotReader;history=historyReader;root=Path.GetFullPath(dashboardRoot);var bytes=new byte[32];using(var rng=RandomNumberGenerator.Create())rng.GetBytes(bytes);token=BitConverter.ToString(bytes).Replace("-","").ToLowerInvariant();expires=DateTime.UtcNow.AddHours(8);}
  public string PairUrl(string baseUrl){return baseUrl+"/pair?token="+token;}
  public void Start(){for(int p=8885;p<=8905;p++){var candidate=new TcpListener(IPAddress.Loopback,p);try{candidate.Start();listener=candidate;Port=p;break;}catch(SocketException ex){candidate.Stop();if(ex.SocketErrorCode!=SocketError.AddressAlreadyInUse)throw;}}if(listener==null)throw new SocketException((int)SocketError.AddressAlreadyInUse);var thread=new Thread(AcceptLoop);thread.IsBackground=true;thread.Start();}
  void AcceptLoop(){while(!stopped){try{var client=listener.AcceptTcpClient();if(Interlocked.Increment(ref clients)>8){Interlocked.Decrement(ref clients);client.Close();continue;}ThreadPool.QueueUserWorkItem(_=>{try{Handle(client);}catch(Exception){}finally{client.Close();Interlocked.Decrement(ref clients);}});}catch(SocketException){if(stopped)return;}catch(ObjectDisposedException){return;}}}
@@ -26,8 +26,9 @@ class MobileServer : IDisposable {
   string cookie,session=null;if(headers.TryGetValue("Cookie",out cookie))foreach(string item in cookie.Split(';')){var pair=item.Trim().Split(new[]{'='},2);if(pair.Length==2&&pair[0]=="mega_phone")session=pair[1];}
   if(!Valid(session)){Reply(stream,"401 Unauthorized","text/plain","Open the pairing link from your computer first. Do not share it.",null);return;}
   string path=target.Split('?')[0];if(path=="/api/snapshot"){Reply(stream,"200 OK","application/json",snapshot(),null);return;}
+  if(path=="/api/history"&&history!=null){Reply(stream,"200 OK","application/json",history(target),null);return;}
   if(path=="/"){string html=File.ReadAllText(Path.Combine(root,"index.html"),Encoding.UTF8).Replace("window.liveMode=new URLSearchParams(location.search).get(\"mode\")===\"live\";","window.liveMode=true;window.remotePhoneMode=true;");Reply(stream,"200 OK","text/html",html,null);return;}
-  if(path=="/large-order-alerts.js"||path=="/dashboard-live.js"||path=="/live-flow.js"){Reply(stream,"200 OK","text/javascript",File.ReadAllText(Path.Combine(root,path.Substring(1)),Encoding.UTF8),null);return;}
+  if(path=="/large-order-alerts.js"||path=="/dashboard-live.js"||path=="/live-flow.js"||path=="/market-history.js"){Reply(stream,"200 OK","text/javascript",File.ReadAllText(Path.Combine(root,path.Substring(1)),Encoding.UTF8),null);return;}
   Reply(stream,"404 Not Found","text/plain","Not found",null);
  }
  static string ReadLine(NetworkStream stream,int limit){if(limit<=0)throw new IOException();var bytes=new List<byte>();int c;while((c=stream.ReadByte())!=-1){if(c==10){if(bytes.Count>0&&bytes[bytes.Count-1]==13)bytes.RemoveAt(bytes.Count-1);return Encoding.ASCII.GetString(bytes.ToArray());}if(bytes.Count>=limit)throw new IOException();bytes.Add((byte)c);}return null;}

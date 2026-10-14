@@ -1,7 +1,7 @@
 ﻿$ErrorActionPreference = 'Stop'
 Set-Location $PSScriptRoot
 try {
-    foreach ($asset in @('index.html', 'large-order-alerts.js', 'dashboard-live.js', 'live-flow.js', 'phone.html', 'phone.js', 'vendor\qrcode.js')) {
+    foreach ($asset in @('index.html', 'large-order-alerts.js', 'dashboard-live.js', 'live-flow.js', 'market-history.js', 'phone.html', 'phone.js', 'vendor\qrcode.js')) {
         if (!(Test-Path (Join-Path (Split-Path $PSScriptRoot -Parent) $asset))) { throw 'Dashboard files missing. Extract the whole repository ZIP and keep windows-connector inside it.' }
     }
     if (!(Test-Path 'megaSpeedyAPIDotnet.dll') -or !(Test-Path 'megaSpeedyAPI.dll') -or !(Test-Path 'Temp') -or !(Test-Path 'speedyAPI_config.json')) {
@@ -47,7 +47,7 @@ try {
     if ($running.Count -gt 0) { throw 'Connector is already running. Use Alt+Tab to find it, or close it before restarting.' }
     $compiler = Join-Path $env:WINDIR 'Microsoft.NET\Framework\v4.0.30319\csc.exe'
     if (!(Test-Path $compiler)) { throw '.NET Framework compiler missing.' }
-    & $compiler /nologo /codepage:65001 /target:winexe /platform:x86 /out:Connector.exe /reference:System.Windows.Forms.dll /reference:System.Drawing.dll /reference:megaSpeedyAPIDotnet.dll Connector.cs MobileServer.cs OptionChain.cs
+    & $compiler /nologo /codepage:65001 /target:winexe /platform:x86 /out:Connector.exe /reference:System.Windows.Forms.dll /reference:System.Drawing.dll /reference:System.Runtime.Serialization.dll /reference:System.Xml.dll /reference:System.IO.Compression.dll /reference:System.IO.Compression.FileSystem.dll /reference:megaSpeedyAPIDotnet.dll Connector.cs MobileServer.cs OptionChain.cs MarketArchive.cs ContractCalendar.cs TaifexHistory.cs TickHistory.cs
     if ($LASTEXITCODE -ne 0) { throw 'Compilation failed. Please send a screenshot without credentials.' }
     Start-Process -FilePath '.\Connector.exe' -WorkingDirectory $PSScriptRoot
 } catch {
